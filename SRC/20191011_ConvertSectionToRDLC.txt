@@ -1,0 +1,618 @@
+OBJECT Page 98765 ConvertSectionToRDLC
+{
+  OBJECT-PROPERTIES
+  {
+    Date=11.10.19;
+    Time=12:00:00;
+    Version List=;
+  }
+  PROPERTIES
+  {
+    OnOpenPage=BEGIN
+                 Initialize;
+               END;
+
+    ActionList=ACTIONS
+    {
+      { 1106900007;  ;ActionContainer;
+                      ActionContainerType=ActionItems }
+      { 1106900003;1 ;Action    ;
+                      Name=CreateListOfControls;
+                      CaptionML=DEU=Convert To RDLC XML;
+                      Promoted=Yes;
+                      PromotedIsBig=Yes;
+                      OnAction=BEGIN
+                                 Action_CreateListOfControls;
+                               END;
+                                }
+      { 1106900011;1 ;Action    ;
+                      Name=TryFindRDLFolder;
+                      OnAction=BEGIN
+                                 Action_TryFindRDLFolder
+                               END;
+                                }
+    }
+  }
+  CONTROLS
+  {
+    { 1106900000;;Container;
+                ContainerType=ContentArea }
+
+    { 1106900004;1;Group  ;
+                GroupType=GridLayout;
+                Layout=Columns }
+
+    { 1106900005;2;Group  ;
+                CaptionML=[DEU=Paste Single Section Content here (Starting with "          CONTROLS"\Ends with "       }"];
+                GroupType=Group }
+
+    { 1106900001;3;Field  ;
+                SourceExpr=Section_Content;
+                MultiLine=Yes }
+
+    { 1106900006;2;Group  ;
+                GroupType=Group }
+
+    { 1106900002;3;Field  ;
+                SourceExpr=RDLC_Content;
+                MultiLine=Yes }
+
+    { 1106900008;1;Group  ;
+                Name=Options;
+                CaptionML=DEU=Einstellungen;
+                GroupType=Group }
+
+    { 1106900009;2;Field  ;
+                CaptionML=DEU=Standard Value fÅr Labels;
+                SourceExpr=DefaultSourceExpr_Label }
+
+    { 1106900010;2;Field  ;
+                CaptionML=DEU=Standard Value fÅr Textboxen;
+                SourceExpr=DefaultSourceExpr_TextBox }
+
+  }
+  CODE
+  {
+    VAR
+      Section_Content@1106900000 : Text;
+      RDLC_Content@1106900001 : Text;
+      CRLF@1106900004 : Text[2];
+      DefaultSourceExpr_Label@1106900002 : Text;
+      DefaultSourceExpr_TextBox@1106900003 : Text;
+
+    LOCAL PROCEDURE Action_CreateListOfControls@1106900017();
+    VAR
+      ControlsArray@1106900000 : ARRAY [100] OF Text;
+      i@1106900001 : Integer;
+      PropertiesAsKeyValueArray@1106900002 : ARRAY [100,2] OF Text;
+    BEGIN
+      CreateListOfControls(Section_Content,ControlsArray);
+      CLEAR(RDLC_Content);
+      FOR i:=1 TO COMPRESSARRAY(ControlsArray) DO BEGIN
+        //RDLC_Content += ControlsArray[i] + CRLF;
+        ControlProperties_ParseSingleControlSourceCode(ControlsArray[i],PropertiesAsKeyValueArray);
+
+        RDLC_Content += CreateRDLC_TextBox(PropertiesAsKeyValueArray,DefaultSourceExpr_TextBox);
+        RDLC_Content += CreateRDLC_Label(PropertiesAsKeyValueArray,DefaultSourceExpr_Label);
+        RDLC_Content += CreateRDLC_Shape_Rectangle(PropertiesAsKeyValueArray);
+      END;
+      IF RDLC_Content <> '' THEN
+        RDLC_Content := GetOpeningText +  RDLC_Content + GetClosingText;
+    END;
+
+    LOCAL PROCEDURE CreateListOfControls@1106900012(SourceCode@1106900000 : Text;VAR ControlsArray@1106900001 : ARRAY [100] OF Text);
+    VAR
+      Outstream@1106900002 : OutStream;
+      Instream@1106900003 : InStream;
+      LineContent@1106900004 : Text;
+      LineIndex@1106900005 : Integer;
+      Lines@1106900006 : ARRAY [1000] OF Text;
+      IsNewControlsLine@1106900007 : Boolean;
+      IsClosingLine@1106900009 : Boolean;
+      ControlIndex@1106900008 : Integer;
+      FormatedString@1106900010 : Text;
+    BEGIN
+      /// <summary>
+      /// split list of controls (SourceCode) into an array of single controls (PropertiesAsKeyValueArray)
+      /// </summary
+
+      WHILE STRPOS(SourceCode,CRLF) <> 0 DO BEGIN
+        LineIndex += 1;
+        LineContent := COPYSTR(SourceCode,1,STRPOS(SourceCode,CRLF)-1);
+        SourceCode  := COPYSTR(SourceCode,STRPOS(SourceCode,CRLF) + STRLEN(CRLF));
+        Lines[LineIndex] := LineContent;
+      END;
+
+      FOR LineIndex := 1 TO COMPRESSARRAY(Lines) DO BEGIN
+        IsNewControlsLine := (STRPOS(Lines[LineIndex],'            {') = 1);  // Controls have a fixed indentation in NAV Object files
+        FormatedString := DELCHR(Lines[LineIndex],'=',' ');
+        IsClosingLine := (FormatedString = '}');
+        IF NOT IsClosingLine THEN BEGIN
+          IF IsNewControlsLine THEN
+            ControlIndex +=1;
+          IF ControlIndex > 0 THEN BEGIN
+          IF STRLEN(ControlsArray[ControlIndex])>0 THEN
+            ControlsArray[ControlIndex] += CRLF;
+          ControlsArray[ControlIndex] += Lines[LineIndex];
+          END;
+        END;
+      END;
+    END;
+
+    LOCAL PROCEDURE Action_TryFindRDLFolder@1106900019();
+    VAR
+      DirectoryToSearch@1106900019 : Text;
+      FileToSearch@1106900001 : Text;
+      Environment@1106900018 : DotNet "'mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'.System.Environment" RUNONCLIENT;
+      SearchOption@1106900017 : DotNet "'mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'.System.IO.SearchOption" RUNONCLIENT;
+      SearchResultArray@1106900011 : DotNet "'mscorlib'.System.Array" RUNONCLIENT;
+      Directory@1106900005 : DotNet "'mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'.System.IO.Directory" RUNONCLIENT;
+      Path@1106900002 : DotNet "'mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'.System.IO.Path" RUNONCLIENT;
+      Result@1106900000 : Text;
+      FileInfo@1106900003 : DotNet "'mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'.System.IO.FileInfo" RUNONCLIENT;
+      Index@1106900004 : Integer;
+      LastAccess@1106900006 : DateTime;
+    BEGIN
+      DirectoryToSearch := 'C:\Users\'+Environment.UserName+'\AppData\Local\Temp';
+      FileToSearch := 'Report.rdl';
+      SearchResultArray := Directory.GetFiles(DirectoryToSearch,FileToSearch,SearchOption.AllDirectories);
+      IF SearchResultArray.Length = 0 THEN
+        ERROR('No "%1" found at "%2"',FileToSearch,DirectoryToSearch);
+      IF SearchResultArray.Length = 1 THEN
+        Result := Path.GetDirectoryName(SearchResultArray.GetValue(0));
+      // Search Current
+      IF SearchResultArray.Length > 1 THEN
+        FOR Index := 0 TO SearchResultArray.Length - 1 DO BEGIN
+          FileInfo := FileInfo.FileInfo(SearchResultArray.GetValue(Index));
+          IF (LastAccess < FileInfo.LastAccessTime) OR (LastAccess = 0DT) THEN BEGIN
+            LastAccess := FileInfo.LastAccessTime;
+            Result := Path.GetDirectoryName(SearchResultArray.GetValue(Index));
+          END;
+        END;
+
+
+      HYPERLINK(Result);
+    END;
+
+    LOCAL PROCEDURE Initialize@1106900000();
+    BEGIN
+      CRLF[1]:=13;
+      CRLF[2]:=10;
+      CLEAR(Section_Content);
+    END;
+
+    LOCAL PROCEDURE CreateRDLC_TextBox@1106900002(PropertiesAsKeyValueArray@1106900000 : ARRAY [100,2] OF Text;OptionalDefaultSourceExpr@1106900009 : Text) RDLCTextBoxXML : Text;
+    VAR
+      TextBoxName@1106900001 : Text;
+      ControlID@1106900014 : Integer;
+      XPos@1106900003 : Integer;
+      YPos@1106900002 : Integer;
+      Width@1106900004 : Integer;
+      Height@1106900005 : Integer;
+      FontSize@1106900006 : Integer;
+      FontBold@1106900007 : Boolean;
+      FontItalic@1106900012 : Boolean;
+      SourceExpr@1106900008 : Text;
+      CaptionML@1106900010 : Text;
+      HorzAlign@1106900011 : Text;
+      VertAlign@1106900013 : Text;
+    BEGIN
+      IF NOT IsTextBox(PropertiesAsKeyValueArray) THEN EXIT('');
+
+      TextBoxName := KeyValueArray_Get(PropertiesAsKeyValueArray,'SourceExpr');
+      ControlProperties_GetDefaults(PropertiesAsKeyValueArray,ControlID,XPos,YPos,Width,Height);
+      ControlProperties_GetFontProperties(PropertiesAsKeyValueArray,FontSize,FontBold,FontItalic,HorzAlign,VertAlign);
+      IF KeyValueArray_Contains(PropertiesAsKeyValueArray,'CaptionML') THEN
+        CaptionML := KeyValueArray_Get(PropertiesAsKeyValueArray,'CaptionML');
+
+      TextBoxName := DELCHR(TextBoxName,'=','- ."''');
+      TextBoxName := CONVERTSTR(TextBoxName,',:%','___');
+      TextBoxName := CONVERTSTR(TextBoxName,'()[]','____');
+      RDLCTextBoxXML += '<Textbox Name="'+TextBoxName+'">'+ CRLF;
+      RDLCTextBoxXML += '  <CanGrow>true</CanGrow>'+ CRLF;
+      RDLCTextBoxXML += '  <KeepTogether>true</KeepTogether>'+ CRLF;
+      RDLCTextBoxXML += '  <Paragraphs>'+ CRLF;
+      RDLCTextBoxXML += '    <Paragraph>'+ CRLF;
+      RDLCTextBoxXML += '      <TextRuns>'+ CRLF;
+      RDLCTextBoxXML += '        <TextRun>'+ CRLF;
+      CASE TRUE OF
+      (OptionalDefaultSourceExpr <> ''): BEGIN
+        RDLCTextBoxXML += '          <Value EvaluationMode="Auto">'+ OptionalDefaultSourceExpr + '</Value>'+ CRLF;
+        RDLCTextBoxXML += '          <Label>'+ OptionalDefaultSourceExpr + '</Label>'+ CRLF;
+      END;
+      (CaptionML <> ''):
+        RDLCTextBoxXML += '          <Value EvaluationMode="Auto">'+''''+'=Fields!'+CaptionML+'.Value</Value>'+ CRLF
+      ELSE
+        RDLCTextBoxXML += '          <Value EvaluationMode="Auto">''=Code.GetHeaderData(2)</Value>'+ CRLF;
+      END;
+      RDLCTextBoxXML += '          <Style>'+ CRLF;
+      IF FontSize <> 0 THEN
+        RDLCTextBoxXML += '            <FontSize>'+FORMAT(FontSize)+'pt</FontSize>'+ CRLF;
+      IF FontBold THEN
+        RDLCTextBoxXML += '            <FontWeight>Bold</FontWeight>'+ CRLF;
+      CASE HorzAlign OF
+        'Center':
+          RDLCTextBoxXML += '            <TextAlign>Center</TextAlign>' + CRLF;
+      END;
+      CASE VertAlign OF
+        'Top','Bottom','Center':
+            RDLCTextBoxXML += '              <VerticalAlign>'+VertAlign+'</VerticalAlign>' + CRLF;
+      END;
+      RDLCTextBoxXML += '          </Style>'+ CRLF;
+      RDLCTextBoxXML += '        </TextRun>'+ CRLF;
+      RDLCTextBoxXML += '      </TextRuns>'+ CRLF;
+      RDLCTextBoxXML += '      <Style />'+ CRLF;
+      RDLCTextBoxXML += '    </Paragraph>'+ CRLF;
+      RDLCTextBoxXML += '  </Paragraphs>'+ CRLF;
+      RDLCTextBoxXML += '  <Top>'+DecimalInCM(YPos/1000)+'</Top>'+ CRLF;
+      RDLCTextBoxXML += '  <Left>'+DecimalInCM(XPos/1000)+'</Left>'+ CRLF;
+      RDLCTextBoxXML += '  <Height>'+DecimalInCM(Height/1000)+'</Height>'+ CRLF;
+      RDLCTextBoxXML += '  <Width>'+DecimalInCM(Width/1000)+'</Width>'+ CRLF;
+      RDLCTextBoxXML += '  <ZIndex>1</ZIndex>'+ CRLF;
+      RDLCTextBoxXML += '  <Style>'+ CRLF;
+      RDLCTextBoxXML += '    <Border>'+ CRLF;
+      RDLCTextBoxXML += '      <Style>None</Style>'+ CRLF;
+      RDLCTextBoxXML += '    </Border>'+ CRLF;
+      RDLCTextBoxXML += '  </Style>'+ CRLF;
+      RDLCTextBoxXML += '</Textbox>'+ CRLF;
+    END;
+
+    LOCAL PROCEDURE CreateRDLC_Label@1106900010(PropertiesAsKeyValueArray@1106900000 : ARRAY [100,2] OF Text;OptionalDefaultSourceExpr@1106900010 : Text) RDLCTextBoxXML : Text;
+    VAR
+      TextBoxName@1106900001 : Text;
+      CaptionML@1106900009 : Text;
+      ControlID@1106900012 : Integer;
+      XPos@1106900003 : Integer;
+      YPos@1106900002 : Integer;
+      Width@1106900004 : Integer;
+      Height@1106900005 : Integer;
+      FontSize@1106900006 : Integer;
+      FontBold@1106900007 : Boolean;
+      FontItalic@1106900013 : Boolean;
+      SourceExpr@1106900008 : Text;
+      HorzAlign@1106900011 : Text;
+      VertAlign@1106900014 : Text;
+    BEGIN
+                  { 18  ;Label        ;2250 ;423  ;1200 ;423  ;ParentControl=16;
+                                                               HorzAlign=Right;
+                                                               VertAlign=Bottom;
+                                                               FontSize=9;
+                                                               FontBold=Yes;
+                                                               MultiLine=Yes;
+                                                               CaptionML=DEU=Menge }
+      IF NOT IsLabel(PropertiesAsKeyValueArray) THEN EXIT('');
+
+      TextBoxName :='Label' + KeyValueArray_Get(PropertiesAsKeyValueArray,'ControlID');
+      ControlProperties_GetDefaults(PropertiesAsKeyValueArray,ControlID,XPos,YPos,Width,Height);
+      ControlProperties_GetFontProperties(PropertiesAsKeyValueArray,FontSize,FontBold,FontItalic,HorzAlign,VertAlign);
+      IF KeyValueArray_Contains(PropertiesAsKeyValueArray,'CaptionML') THEN
+        CaptionML := KeyValueArray_Get(PropertiesAsKeyValueArray,'CaptionML');
+
+      TextBoxName := DELCHR(TextBoxName,'=','- ."''');
+      TextBoxName := CONVERTSTR(TextBoxName,',:','__');
+      TextBoxName := CONVERTSTR(TextBoxName,'()[]','____');
+      RDLCTextBoxXML += '<Textbox Name="'+TextBoxName+'">'+ CRLF;
+      RDLCTextBoxXML += '  <CanGrow>true</CanGrow>'+ CRLF;
+      RDLCTextBoxXML += '  <KeepTogether>true</KeepTogether>'+ CRLF;
+      RDLCTextBoxXML += '  <Paragraphs>'+ CRLF;
+      RDLCTextBoxXML += '    <Paragraph>'+ CRLF;
+      RDLCTextBoxXML += '      <TextRuns>'+ CRLF;
+      RDLCTextBoxXML += '        <TextRun>'+ CRLF;
+      CASE TRUE OF
+      (OptionalDefaultSourceExpr <> ''): BEGIN
+        RDLCTextBoxXML += '          <Value EvaluationMode="Auto">'+ OptionalDefaultSourceExpr + '</Value>'+ CRLF;
+        RDLCTextBoxXML += '          <Label>'+ OptionalDefaultSourceExpr + '</Label>'+ CRLF;
+      END;
+      (CaptionML <> ''):
+        RDLCTextBoxXML += '          <Value EvaluationMode="Auto">'+''''+'=Fields!'+CaptionML+'.Value</Value>'+ CRLF
+      ELSE
+        RDLCTextBoxXML += '          <Value EvaluationMode="Auto">''=Code.GetHeaderData(2)</Value>'+ CRLF;
+      END;
+      RDLCTextBoxXML += '          <Style>'+ CRLF;
+      RDLCTextBoxXML += '            <FontSize>'+FORMAT(FontSize)+'pt</FontSize>'+ CRLF;
+      IF FontBold THEN
+        RDLCTextBoxXML += '            <FontWeight>Bold</FontWeight>'+ CRLF;
+      CASE HorzAlign OF
+        'Center':
+          RDLCTextBoxXML += '            <TextAlign>Center</TextAlign>' + CRLF;
+      END;
+      CASE VertAlign OF
+        'Top','Bottom','Center':
+            RDLCTextBoxXML += '              <VerticalAlign>'+VertAlign+'</VerticalAlign>' + CRLF;
+      END;
+      RDLCTextBoxXML += '          </Style>'+ CRLF;
+      RDLCTextBoxXML += '        </TextRun>'+ CRLF;
+      RDLCTextBoxXML += '      </TextRuns>'+ CRLF;
+      RDLCTextBoxXML += '      <Style />'+ CRLF;
+      RDLCTextBoxXML += '    </Paragraph>'+ CRLF;
+      RDLCTextBoxXML += '  </Paragraphs>'+ CRLF;
+      RDLCTextBoxXML += '  <Top>'+DecimalInCM(YPos/1000)+'</Top>'+ CRLF;
+      RDLCTextBoxXML += '  <Left>'+DecimalInCM(XPos/1000)+'</Left>'+ CRLF;
+      RDLCTextBoxXML += '  <Height>'+DecimalInCM(Height/1000)+'</Height>'+ CRLF;
+      RDLCTextBoxXML += '  <Width>'+DecimalInCM(Width/1000)+'</Width>'+ CRLF;
+      RDLCTextBoxXML += '  <ZIndex>1</ZIndex>'+ CRLF;
+      RDLCTextBoxXML += '  <Style>'+ CRLF;
+      RDLCTextBoxXML += '    <Border>'+ CRLF;
+      RDLCTextBoxXML += '      <Style>None</Style>'+ CRLF;
+      RDLCTextBoxXML += '    </Border>'+ CRLF;
+      RDLCTextBoxXML += '  </Style>'+ CRLF;
+      RDLCTextBoxXML += '</Textbox>'+ CRLF;
+    END;
+
+    LOCAL PROCEDURE CreateRDLC_Shape_Rectangle@1106900006(PropertiesAsKeyValueArray@1106900000 : ARRAY [100,2] OF Text) RDLCTextBoxXML : Text;
+    VAR
+      TextBoxName@1106900001 : Text;
+      XPos@1106900003 : Integer;
+      YPos@1106900002 : Integer;
+      Width@1106900004 : Integer;
+      Height@1106900005 : Integer;
+      ControlID@1106900006 : Integer;
+    BEGIN
+      { 1107100003;Shape  ;0    ;1850 ;18270;952  ;ShapeStyle=Rectangle }
+      IF NOT IsShapeStyleRecangle(PropertiesAsKeyValueArray) THEN
+        EXIT('');
+
+      ControlProperties_GetDefaults(PropertiesAsKeyValueArray,ControlID,XPos,YPos,Width,Height);
+      TextBoxName :='Rectangle' + FORMAT(ControlID);
+      EVALUATE(XPos,KeyValueArray_Get(PropertiesAsKeyValueArray,'XPos'));
+      EVALUATE(YPos,KeyValueArray_Get(PropertiesAsKeyValueArray,'YPos'));
+      EVALUATE(Width,KeyValueArray_Get(PropertiesAsKeyValueArray,'Width'));
+      EVALUATE(Height,KeyValueArray_Get(PropertiesAsKeyValueArray,'Height'));
+
+      TextBoxName := DELCHR(TextBoxName,'=','- ."''');
+      TextBoxName := CONVERTSTR(TextBoxName,',:','__');
+      TextBoxName := CONVERTSTR(TextBoxName,'()[]','____');
+      RDLCTextBoxXML += '            <Rectangle Name="'+TextBoxName+'">'+ CRLF;
+      RDLCTextBoxXML += '              <KeepTogether>true</KeepTogether>'+ CRLF;
+      RDLCTextBoxXML += '              <Top>'+DecimalInCM(YPos/1000)+'</Top>'+ CRLF;
+      RDLCTextBoxXML += '              <Left>'+DecimalInCM(XPos/1000)+'</Left>'+ CRLF;
+      RDLCTextBoxXML += '              <Height>'+DecimalInCM(Height/1000)+'</Height>'+ CRLF;
+      RDLCTextBoxXML += '              <Width>'+DecimalInCM(Width/1000)+'</Width>'+ CRLF;
+      RDLCTextBoxXML += '              <Style>'+ CRLF;
+      RDLCTextBoxXML += '                <Border>'+ CRLF;
+      RDLCTextBoxXML += '                  <Style>None</Style>'+ CRLF;
+      RDLCTextBoxXML += '                </Border>'+ CRLF;
+      RDLCTextBoxXML += '              </Style>'+ CRLF;
+      RDLCTextBoxXML += '            </Rectangle>'+ CRLF;
+    END;
+
+    PROCEDURE IsTextBox@1106900003(PropertiesAsKeyValueArray@1106900000 : ARRAY [100,2] OF Text) : Boolean;
+    VAR
+      KeyPos@1106900001 : Integer;
+    BEGIN
+      EXIT(KeyValueArray_Contains(PropertiesAsKeyValueArray,'TextBox'))
+    END;
+
+    PROCEDURE IsLabel@1106900013(PropertiesAsKeyValueArray@1106900000 : ARRAY [100,2] OF Text) : Boolean;
+    VAR
+      KeyPos@1106900001 : Integer;
+    BEGIN
+      EXIT(KeyValueArray_Contains(PropertiesAsKeyValueArray,'Label'));
+    END;
+
+    PROCEDURE IsShapeStyleRecangle@1106900014(PropertiesAsKeyValueArray@1106900000 : ARRAY [100,2] OF Text) : Boolean;
+    VAR
+      KeyPos@1106900001 : Integer;
+    BEGIN
+      IF NOT KeyValueArray_Contains(PropertiesAsKeyValueArray,'ShapeStyle') THEN
+        EXIT(FALSE);
+      EXIT(KeyValueArray_Get(PropertiesAsKeyValueArray,'ShapeStyle') = 'Rectangle');
+    END;
+
+    LOCAL PROCEDURE KeyValueArray_AddKeyValue@1106900005(VAR PropertiesAsKeyValueArray@1106900000 : ARRAY [100,2] OF Text;Key@1106900001 : Text;Value@1106900002 : Text);
+    VAR
+      KeyIndex@1106900003 : Integer;
+      HasValue@1106900004 : Boolean;
+      NextFreeSlot@1106900005 : Integer;
+      MaxSteps@1106900006 : Integer;
+    BEGIN
+      MaxSteps := ARRAYLEN(PropertiesAsKeyValueArray,1);
+      FOR KeyIndex := 1 TO ARRAYLEN(PropertiesAsKeyValueArray,1) DO BEGIN
+        IF (NextFreeSlot=0) AND (PropertiesAsKeyValueArray[KeyIndex][1]='') THEN
+          NextFreeSlot := KeyIndex;
+        IF PropertiesAsKeyValueArray[KeyIndex][1] = Key THEN BEGIN
+          PropertiesAsKeyValueArray[KeyIndex][2] := Value;
+          HasValue := TRUE;
+        END;
+      END;
+      IF NOT HasValue THEN BEGIN
+        PropertiesAsKeyValueArray[NextFreeSlot][1] := Key;
+        PropertiesAsKeyValueArray[NextFreeSlot][2] := Value;
+      END;
+    END;
+
+    LOCAL PROCEDURE KeyValueArray_Contains@1106900015(PropertiesAsKeyValueArray@1106900002 : ARRAY [100,2] OF Text;Key@1106900001 : Text) : Boolean;
+    VAR
+      KeyIndex@1106900000 : Integer;
+      HasValue@1106900003 : Boolean;
+    BEGIN
+      FOR KeyIndex := 1 TO ARRAYLEN(PropertiesAsKeyValueArray,1) DO
+        IF PropertiesAsKeyValueArray[KeyIndex][1] = Key THEN
+          EXIT(PropertiesAsKeyValueArray[KeyIndex][2] <> '');
+    END;
+
+    LOCAL PROCEDURE KeyValueArray_Get@1106900009(PropertiesAsKeyValueArray@1106900002 : ARRAY [100,2] OF Text;Key@1106900001 : Text) Value : Text;
+    VAR
+      KeyIndex@1106900000 : Integer;
+      HasValue@1106900003 : Boolean;
+    BEGIN
+      FOR KeyIndex := 1 TO ARRAYLEN(PropertiesAsKeyValueArray,1) DO
+        IF PropertiesAsKeyValueArray[KeyIndex][1] = Key THEN BEGIN
+          EXIT(PropertiesAsKeyValueArray[KeyIndex][2]);
+          HasValue := TRUE;
+        END;
+    END;
+
+    LOCAL PROCEDURE LTrim@1106900004(TextToTrim@1106900000 : Text;TrimChar@1106900001 : Text[1]) Result : Text;
+    VAR
+      i@1106900002 : Integer;
+    BEGIN
+      IF (STRLEN(TextToTrim)=0) OR (STRPOS(TextToTrim,TrimChar)=0) THEN
+        EXIT(TextToTrim);
+      Result := TextToTrim;
+      WHILE Result[1]=TrimChar[1] DO
+        IF STRLEN(Result)>1 THEN
+          Result := COPYSTR(Result,2);
+    END;
+
+    LOCAL PROCEDURE RTrim@1106900008(TextToTrim@1106900000 : Text;TrimChar@1106900001 : Text[1]) Result : Text;
+    VAR
+      i@1106900002 : Integer;
+    BEGIN
+      IF (STRLEN(TextToTrim)=0) OR (STRPOS(TextToTrim,TrimChar)=0) THEN
+        EXIT(TextToTrim);
+      Result := TextToTrim;
+      WHILE (STRLEN(Result)>1) AND (Result[STRLEN(Result)]=TrimChar[1]) DO
+        IF STRLEN(Result)>1 THEN
+          Result := COPYSTR(Result,1,STRLEN(Result)-1);
+    END;
+
+    LOCAL PROCEDURE DecimalInCM@1106900018(DecimalVal@1106900000 : Decimal) CMWithPoint : Text;
+    BEGIN
+      CMWithPoint += FORMAT(DecimalVal,0,1);
+      CMWithPoint := CONVERTSTR(CMWithPoint,',','.');
+      CMWithPoint +='cm';
+    END;
+
+    LOCAL PROCEDURE GetOpeningText@1106900024() OpeningText : Text;
+    BEGIN
+      OpeningText += '<!-- Start -->' + CRLF;
+      OpeningText += '<ReportItems>' + CRLF;
+    END;
+
+    LOCAL PROCEDURE GetClosingText@1106900023() ClosingText : Text;
+    BEGIN
+      ClosingText += '</ReportItems>'  + CRLF;
+      ClosingText += '<!-- END  if you embed this code in a reportitems block please remove the </ReportItems> Line -->' + CRLF;
+    END;
+
+    LOCAL PROCEDURE ControlProperties_ParseSingleControlSourceCode@1106900001(SourceCode@1106900002 : Text;VAR PropertiesAsKeyValueArray@1106900006 : ARRAY [100,2] OF Text) NoOfProperties : Integer;
+    VAR
+      IsMasked@1106900001 : Boolean;
+      Position@1106900000 : Integer;
+      CurrPropertyText@1106900003 : Text;
+      TextAtPostion@1106900004 : Text[1];
+      PropertyArray@1106900005 : ARRAY [100] OF Text;
+      UnFormatedValue@1106900007 : Text;
+      FormatedValue@1106900008 : Text;
+      FormatIndex@1106900009 : Integer;
+    BEGIN
+      /// <summary>
+      /// split single control (SourceCode) into list of control properties (PropertiesAsKeyValueArray)
+      /// </summary
+      CLEAR(PropertiesAsKeyValueArray);
+      FOR Position := 1 TO STRLEN(SourceCode) DO BEGIN
+        TextAtPostion := FORMAT(SourceCode[Position]);
+        CASE TRUE OF
+          (CRLF[1]=SourceCode[Position]):;
+          (CRLF[2]=SourceCode[Position]):;
+          (TextAtPostion='['): IsMasked := TRUE;
+          (TextAtPostion=']'): IsMasked := FALSE;
+          NOT IsMasked AND (TextAtPostion='{'): NoOfProperties:=1;
+          NOT IsMasked AND (TextAtPostion=';'): BEGIN
+             NoOfProperties+=1;
+          END;
+        END; // END_CASE
+        IF NoOfProperties > 0 THEN
+          PropertyArray[NoOfProperties] += FORMAT(SourceCode[Position]);
+      END;
+
+      FOR Position := 1 TO COMPRESSARRAY(PropertyArray) DO BEGIN
+        UnFormatedValue :=  PropertyArray[Position];
+        UnFormatedValue := DELCHR(UnFormatedValue,'=',FORMAT(CRLF[1]));
+        UnFormatedValue := DELCHR(UnFormatedValue,'=',FORMAT(CRLF[2]));
+        UnFormatedValue := LTrim(UnFormatedValue,' ');
+        UnFormatedValue := DELCHR(UnFormatedValue,'<>','{');
+        UnFormatedValue := DELCHR(UnFormatedValue,'<>','}');
+        UnFormatedValue := DELCHR(UnFormatedValue,'<>',';');
+        UnFormatedValue := LTrim(UnFormatedValue,' ');
+        UnFormatedValue := DELCHR(UnFormatedValue,'<>','{');
+        UnFormatedValue := DELCHR(UnFormatedValue,'<>','}');
+        UnFormatedValue := DELCHR(UnFormatedValue,'<>',';');
+        UnFormatedValue := LTrim(UnFormatedValue,' ');
+        UnFormatedValue := DELCHR(UnFormatedValue,'<>','{');
+        UnFormatedValue := DELCHR(UnFormatedValue,'<>','}');
+        UnFormatedValue := DELCHR(UnFormatedValue,'<>',';');
+        UnFormatedValue := RTrim(UnFormatedValue,' ');
+        PropertyArray[Position] :=  UnFormatedValue;
+      END;
+
+      IF PropertyArray[2] IN ['TextBox','Label','Shape'] THEN BEGIN
+        PropertiesAsKeyValueArray[1][1]:=PropertyArray[2];
+        PropertiesAsKeyValueArray[1][2]:=PropertyArray[1];
+        FOR Position := 1 TO COMPRESSARRAY(PropertyArray) DO BEGIN
+          CASE TRUE OF
+            (Position=1): KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'ControlID',PropertyArray[1]);
+            (Position=2):;
+            (Position=3): KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'XPos'  ,PropertyArray[3]);
+            (Position=4): KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'YPos'  ,PropertyArray[4]);
+            (Position=5): KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'Width' ,PropertyArray[5]);
+            (Position=6): KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'Height',PropertyArray[6]);
+            STRPOS(PropertyArray[Position],'FontSize=')<>0:      KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'FontSize',DELCHR(PropertyArray[Position],'<','FontSize='));
+            STRPOS(PropertyArray[Position],'SourceExpr=')<>0:    KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'SourceExpr',DELCHR(PropertyArray[Position],'<','SourceExpr='));
+            STRPOS(PropertyArray[Position],'CaptionML=DEU=')<>0: KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'CaptionML',DELCHR(PropertyArray[Position],'<','CaptionML=DEU='));
+            STRPOS(PropertyArray[Position],'ShapeStyle=')<>0:    KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'ShapeStyle',DELCHR(PropertyArray[Position],'<','ShapeStyle='));
+            STRPOS(PropertyArray[Position],'BorderWidth=')<>0:   KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'BorderWidth',DELCHR(PropertyArray[Position],'<','BorderWidth='));
+            STRPOS(PropertyArray[Position],'HorzAlign=')<>0:     KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'HorzAlign',DELCHR(PropertyArray[Position],'<','HorzAlign='));
+            STRPOS(PropertyArray[Position],'VertAlign=')<>0:     KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'VertAlign',DELCHR(PropertyArray[Position],'<','VertAlign='));
+            STRPOS(PropertyArray[Position],'FontBold=')<>0:      KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'FontBold',DELCHR(PropertyArray[Position],'<','FontBold='));
+            STRPOS(PropertyArray[Position],'FontItalic=')<>0:    KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'FontItalic',DELCHR(PropertyArray[Position],'<','FontItalic='));
+            STRPOS(PropertyArray[Position],'FontUnderline=')<>0: KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'FontUnderline',DELCHR(PropertyArray[Position],'<','FontUnderline='));
+            STRPOS(PropertyArray[Position],'ParentControl=')<>0: KeyValueArray_AddKeyValue(PropertiesAsKeyValueArray,'ParentControl',DELCHR(PropertyArray[Position],'<','ParentControl='));
+          END; // END_CASE
+        END;
+      END;
+    END;
+
+    LOCAL PROCEDURE ControlProperties_GetDefaults@1106900022(PropertiesAsKeyValueArray@1106900000 : ARRAY [100,2] OF Text;VAR ControlID@1106900005 : Integer;VAR XPos@1106900004 : Integer;VAR YPos@1106900003 : Integer;VAR Width@1106900002 : Integer;VAR Height@1106900001 : Integer);
+    BEGIN
+      CLEAR(ControlID);
+      EVALUATE(ControlID,KeyValueArray_Get(PropertiesAsKeyValueArray,'ControlID'));
+
+      CLEAR(XPos);
+      EVALUATE(XPos,KeyValueArray_Get(PropertiesAsKeyValueArray,'XPos'));
+
+      CLEAR(YPos);
+      EVALUATE(YPos,KeyValueArray_Get(PropertiesAsKeyValueArray,'YPos'));
+
+      CLEAR(Width);
+      EVALUATE(Width,KeyValueArray_Get(PropertiesAsKeyValueArray,'Width'));
+
+      CLEAR(Height);
+      EVALUATE(Height,KeyValueArray_Get(PropertiesAsKeyValueArray,'Height'));
+    END;
+
+    LOCAL PROCEDURE ControlProperties_GetFontProperties@1106900025(PropertiesAsKeyValueArray@1106900000 : ARRAY [100,2] OF Text;VAR FontSize@1106900005 : Integer;VAR FontBold@1106900004 : Boolean;VAR FontItalic@1106900003 : Boolean;VAR HorzAlign@1106900002 : Text;VAR VertAlign@1106900001 : Text);
+    BEGIN
+      CLEAR(FontSize);
+      IF KeyValueArray_Contains(PropertiesAsKeyValueArray,'FontSize') THEN
+        EVALUATE(FontSize,KeyValueArray_Get(PropertiesAsKeyValueArray,'FontSize'));
+
+      CLEAR(FontBold);
+      IF KeyValueArray_Contains(PropertiesAsKeyValueArray,'FontBold') THEN
+        FontBold := (KeyValueArray_Get(PropertiesAsKeyValueArray,'FontBold')='Yes');
+
+      CLEAR(FontItalic);
+      IF KeyValueArray_Contains(PropertiesAsKeyValueArray,'FontItalic') THEN
+        FontItalic := (KeyValueArray_Get(PropertiesAsKeyValueArray,'FontItalic')='Yes');
+
+      CLEAR(HorzAlign);
+      IF KeyValueArray_Contains(PropertiesAsKeyValueArray,'HorzAlign') THEN
+        EVALUATE(HorzAlign,KeyValueArray_Get(PropertiesAsKeyValueArray,'HorzAlign'));
+
+      CLEAR(VertAlign);
+      IF KeyValueArray_Contains(PropertiesAsKeyValueArray,'VertAlign') THEN
+        EVALUATE(VertAlign,KeyValueArray_Get(PropertiesAsKeyValueArray,'VertAlign'));
+    END;
+
+    BEGIN
+    {
+      CreateListOfControls
+      * Transforms list of controls of one section into an array containing one control per array item
+      ControlProperties_ParseSingleControlSourceCode
+      * Parse single control for properties and save them in an array
+    }
+    END.
+  }
+}
+
