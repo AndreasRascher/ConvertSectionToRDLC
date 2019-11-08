@@ -63,11 +63,11 @@ OBJECT Page 98765 ConvertSectionToRDLC
                 GroupType=Group }
 
     { 1106900009;2;Field  ;
-                CaptionML=DEU=Standard Value fÅr Labels;
+                CaptionML=DEU=Standard Value f¬År Labels;
                 SourceExpr=DefaultSourceExpr_Label }
 
     { 1106900010;2;Field  ;
-                CaptionML=DEU=Standard Value fÅr Textboxen;
+                CaptionML=DEU=Standard Value f¬År Textboxen;
                 SourceExpr=DefaultSourceExpr_TextBox }
 
   }
