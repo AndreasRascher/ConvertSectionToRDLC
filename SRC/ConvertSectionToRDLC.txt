@@ -2,7 +2,7 @@ OBJECT Page 98765 ConvertSectionToRDLC
 {
   OBJECT-PROPERTIES
   {
-    Date=11.10.19;
+    Date=12.11.19;
     Time=12:00:00;
     Version List=;
   }
@@ -309,7 +309,8 @@ OBJECT Page 98765 ConvertSectionToRDLC
         RDLCTextBoxXML += '          <Value EvaluationMode="Auto">''=Code.GetHeaderData(2)</Value>'+ CRLF;
       END;
       RDLCTextBoxXML += '          <Style>'+ CRLF;
-      RDLCTextBoxXML += '            <FontSize>'+FORMAT(FontSize)+'pt</FontSize>'+ CRLF;
+      IF FontSize <> 0 THEN
+        RDLCTextBoxXML += '            <FontSize>'+FORMAT(FontSize)+'pt</FontSize>'+ CRLF;
       IF FontBold THEN
         RDLCTextBoxXML += '            <FontWeight>Bold</FontWeight>'+ CRLF;
       CASE HorzAlign OF
